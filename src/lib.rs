@@ -16,10 +16,10 @@
 //!
 //! ## Stability
 //!
-//! v0.1.x ships retrieval-quality evaluation only. RAGAS-style answer judges
-//! and knowledge-gain metrics are planned for v0.2 and v0.3 respectively;
-//! their stub modules are intentionally absent until they ship to keep the
-//! public surface honest.
+//! v0.1.x ships retrieval-quality evaluation only. The `ragas` feature adds
+//! LLM-based RAGAS-style judges (`FaithfulnessMetric`, `ContextPrecisionMetric`,
+//! `ContextRecallMetric`, `AnswerRelevanceMetric`) driven by
+//! [`ragas::RagasHarness`]. Knowledge-gain metrics remain planned for v0.3.
 
 #![deny(missing_docs)]
 #![deny(rust_2018_idioms)]
@@ -28,6 +28,8 @@
 pub mod dataset;
 pub mod error;
 pub mod harness;
+#[cfg(feature = "ragas")]
+pub mod ragas;
 pub mod report;
 pub mod retrieval;
 

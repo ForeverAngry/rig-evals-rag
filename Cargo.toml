@@ -18,6 +18,7 @@ serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 tracing = "0.1.41"
 futures = "0.3.32"
+schemars = { version = "1.2.1", features = ["derive"] }
 
 [dev-dependencies]
 anyhow = "1.0.102"
@@ -27,8 +28,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [features]
 default = ["retrieval"]
-# Pure-Rust IR metrics. Zero LLM deps.
 retrieval = []
+ragas = []
 
 [lints.clippy]
 dbg_macro = "forbid"

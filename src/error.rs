@@ -29,6 +29,17 @@ pub enum Error {
     #[error("vector store error: {0}")]
     Store(#[from] VectorStoreError),
 
+    /// An LLM [`Extractor`](rig::extractor::Extractor) invocation failed
+    /// inside a RAGAS judge.
+    #[cfg(feature = "ragas")]
+    #[error("extractor error: {0}")]
+    Extraction(#[from] rig::extractor::ExtractionError),
+
+    /// An embedding-model invocation failed inside a RAGAS judge.
+    #[cfg(feature = "ragas")]
+    #[error("embedding error: {0}")]
+    Embedding(#[from] rig::embeddings::EmbeddingError),
+
     /// The configured top-k or sample count was invalid (e.g. zero).
     #[error("invalid configuration: {0}")]
     Config(String),

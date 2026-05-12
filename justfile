@@ -22,9 +22,12 @@ fmt:
 clippy:
     cargo clippy --all-targets -- -D warnings
     cargo clippy --no-default-features --all-targets -- -D warnings
+    cargo clippy --no-default-features --features ragas --all-targets -- -D warnings
+    cargo clippy --all-features --all-targets -- -D warnings
 
 test:
     cargo test --all-features
+    cargo test --no-default-features --features ragas
 
 doc:
     RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
