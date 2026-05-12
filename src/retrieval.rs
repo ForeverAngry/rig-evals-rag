@@ -15,8 +15,11 @@
 //! - [`NdcgAtK`]     — graded normalized DCG @ k (uses the integer grade
 //!   stored in [`GoldQuery::relevant_docs`]).
 //!
-//! All metrics return `1.0` for an empty `relevant_docs` set on the gold
-//! query by convention (no relevant docs ⇒ vacuously perfect). Callers who
+//! With the exception of [`PrecisionAtK`], all metrics return `1.0` for an
+//! empty `relevant_docs` set on the gold query by convention (no relevant
+//! docs ⇒ vacuously perfect). [`PrecisionAtK`] always divides by `k` and
+//! therefore returns `0.0` when no top-k hit is relevant — including the
+//! case where the gold query has no relevant docs at all. Callers who
 //! prefer to drop unjudged queries should filter them out of the
 //! [`Qrels`](crate::dataset::Qrels) before scoring.
 
@@ -390,5 +393,48 @@ mod tests {
         assert_eq!(RecallAtK::new(3).score(&g, &r), 1.0);
         assert_eq!(NdcgAtK::new(3).score(&g, &r), 1.0);
         assert_eq!(Mrr.score(&g, &r), 1.0);
+    }
+
+    #[test]
+    fn empty_relevance_is_vacuously_perfect_for_every_metric() {
+        // Lock in the documented vacuous-perfect contract for every metric
+        // that honours it. PrecisionAtK is the documented exception
+        // (always divides by k) and is pinned separately below.
+        let g = gold(&[]);
+        let r = retrieved(&["a", "b", "c"]);
+        let vacuous: Vec<(String, f64)> = vec![
+            (RecallAtK::new(3).name(), RecallAtK::new(3).score(&g, &r)),
+            (HitRateAtK::new(3).name(), HitRateAtK::new(3).score(&g, &r)),
+            (Mrr.name(), Mrr.score(&g, &r)),
+            (MapAtK::new(3).name(), MapAtK::new(3).score(&g, &r)),
+            (NdcgAtK::new(3).name(), NdcgAtK::new(3).score(&g, &r)),
+        ];
+        for (name, score) in vacuous {
+            assert_eq!(
+                score, 1.0,
+                "{name} broke the vacuous-perfect contract for empty relevance"
+            );
+        }
+
+        // Contract must also hold when both gold and retrieved are empty
+        // for every vacuous-perfect metric.
+        let empty = retrieved(&[]);
+        assert_eq!(RecallAtK::new(3).score(&g, &empty), 1.0);
+        assert_eq!(HitRateAtK::new(3).score(&g, &empty), 1.0);
+        assert_eq!(Mrr.score(&g, &empty), 1.0);
+        assert_eq!(MapAtK::new(3).score(&g, &empty), 1.0);
+        assert_eq!(NdcgAtK::new(3).score(&g, &empty), 1.0);
+    }
+
+    #[test]
+    fn precision_at_k_is_not_vacuously_perfect() {
+        // PrecisionAtK is the documented exception to the vacuous-perfect
+        // contract: numerator can only be 0 when there are no relevant docs,
+        // and the denominator stays `k`. Pin the actual behaviour so any
+        // future refactor of the divergence is intentional and visible.
+        let g = gold(&[]);
+        let r = retrieved(&["a", "b", "c"]);
+        assert_eq!(PrecisionAtK::new(3).score(&g, &r), 0.0);
+        assert_eq!(PrecisionAtK::new(3).score(&g, &retrieved(&[])), 0.0);
     }
 }

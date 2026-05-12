@@ -16,17 +16,21 @@ diff between runs to catch regressions before they ship.
 
 `v0.1.x` ships **retrieval-quality** evaluation only:
 
-| Capability         | v0.1 | v0.2 | v0.3 |
-|--------------------|:---:|:---:|:---:|
-| BEIR-style qrels loader            | ✅ | ✅ | ✅ |
+| Capability | v0.1 | v0.2 | v0.3 |
+| --- | :---: | :---: | :---: |
+| BEIR-style qrels loader | ✅ | ✅ | ✅ |
 | Recall / Precision / MRR / MAP / nDCG / HitRate | ✅ | ✅ | ✅ |
 | Async `RetrievalHarness` over any `VectorStoreIndex` | ✅ | ✅ | ✅ |
 | JSON / Markdown reports + baseline diff | ✅ | ✅ | ✅ |
 | RAGAS-style LLM judges (faithfulness, context_recall, …) | — | ✅ | ✅ |
 | Knowledge-gain scoring (per-doc Δ-recall + novelty) | — | — | ✅ |
 
-The roadmap, including out-of-scope items and reopen triggers, lives in
+The crate-local maturity plan lives in [ROADMAP.md](ROADMAP.md). The fuller
+phased planning record, including out-of-scope items and reopen triggers, lives
+in
 [`rig-contributions/docs/evals-rag-plan.md`](https://github.com/ForeverAngry/rig-contributions/blob/main/docs/evals-rag-plan.md).
+Cross-crate coordination lives in
+[`rig-contributions/docs/roadmap.md`](https://github.com/ForeverAngry/rig-contributions/blob/main/docs/roadmap.md).
 
 ## Quickstart
 

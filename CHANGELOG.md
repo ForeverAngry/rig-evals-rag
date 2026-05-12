@@ -1,5 +1,7 @@
 # Changelog
 
+<!-- markdownlint-disable MD024 -->
+
 All notable changes to `rig-evals-rag` are documented here. The format is
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this crate
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -8,6 +10,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add crate-local `ROADMAP.md` documenting maturity status, next work, and
+  non-goals for retrieval and RAG evaluation.
 - `ragas` feature (off by default): LLM-based RAGAS-style judges
   (`FaithfulnessMetric`, `ContextPrecisionMetric`, `ContextRecallMetric`,
   `AnswerRelevanceMetric`) wired through a single `RagasMetric` trait and an
