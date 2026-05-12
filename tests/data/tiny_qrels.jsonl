@@ -1,0 +1,3 @@
+{"query_id":"q1","query":"who wrote 1984?","relevant_docs":{"doc-orwell":2,"doc-1984":1}}
+{"query_id":"q2","query":"capital of france","relevant_docs":{"doc-paris":3}}
+{"query_id":"q3","query":"speed of light","relevant_docs":{"doc-light":2,"doc-physics":1}}

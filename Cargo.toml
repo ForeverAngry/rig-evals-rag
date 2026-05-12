@@ -1,0 +1,49 @@
+[package]
+name = "rig-evals-rag"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+description = "Knowledge-base and retrieval evaluation harness for Rig agents."
+repository = "https://github.com/ForeverAngry/rig-evals-rag"
+authors = ["ForeverAngry"]
+keywords = ["rig", "rag", "evals", "retrieval", "agent"]
+categories = ["text-processing", "development-tools::testing"]
+
+[dependencies]
+rig-core = { version = "0.36.0", default-features = false }
+thiserror = "2.0.12"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+tracing = "0.1.41"
+futures = "0.3.32"
+
+[dev-dependencies]
+anyhow = "1.0.102"
+tempfile = "3"
+tokio = { version = "1.51.1", features = ["macros", "rt-multi-thread"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[features]
+default = ["retrieval"]
+# Pure-Rust IR metrics. Zero LLM deps.
+retrieval = []
+
+[lints.clippy]
+dbg_macro = "forbid"
+await_holding_lock = "deny"
+await_holding_refcell_ref = "deny"
+expect_used = "deny"
+expect_fun_call = "deny"
+indexing_slicing = "deny"
+panic = "deny"
+panic_in_result_fn = "deny"
+todo = "forbid"
+unimplemented = "forbid"
+unreachable = "deny"
+unwrap_used = "deny"
+
+[profile.release]
+lto = true
+opt-level = "s"
