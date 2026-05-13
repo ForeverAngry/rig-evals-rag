@@ -13,19 +13,21 @@ This roadmap is the crate-local operating plan for `rig-evals-rag`. The cross-cr
 - Async `RetrievalHarness` over `VectorStoreIndexDyn` with bounded concurrency.
 - `MetricReport` and `MultiReport` with JSON, Markdown, aggregation, and baseline diffing.
 - Off-by-default `ragas` feature with RAGAS-style judges, `RagasHarness`, bounded-concurrency judge calls, XML-fenced prompts, abstention scores, and judge fingerprint diff protection.
+- Off-by-default `ingestion` feature with zero-waste ingestion deltas, deterministic IoC extraction, proposition extraction, redundancy checks, and model-independent contract tests for LLM-backed proposition extractors.
+- Off-by-default `ingestion-graph` sub-feature with knowledge-graph triples, in-memory and `petgraph` baselines, and model-independent contract tests for LLM-backed triple extractors.
 
 ## Prototype Grade
 
 - Retrieval metrics are usable; RAGAS is merged but release pending.
-- There is no ingestion linter for chunk stats or near-duplicate detection.
+- Zero-waste ingestion tracks are merged and covered by deterministic tests; chunk-stat linting, language/encoding linting, and MinHash-style near-duplicate detection remain planned.
 - There is no committed `eval_memvid.rs` integration example yet.
 - Knowledge-gain scoring and shadow-store contracts remain planned.
 - Bootstrap confidence intervals and CI regression gates are not implemented.
 
 ## Next Work
 
-1. Cut the RAGAS release after final validation and README/changelog sync.
-2. Add an ingestion linter for chunk-length distributions, metadata coverage, and MinHash near-duplicates.
+1. Cut the RAGAS and ingestion release after final validation and README/changelog sync.
+2. Add chunk-stat ingestion linting for token-length distributions, metadata coverage, language/encoding sanity, and MinHash near-duplicates.
 3. Add `examples/eval_memvid.rs` wiring `rig-memvid::MemvidStore` through `RetrievalHarness` with committed fixture data.
 4. Define `EvalShadowStore` for pre/post-ingest scoring and implement the memvid shadow path.
 5. Add knowledge-gain scoring: pre/post qrels delta plus embedding novelty.

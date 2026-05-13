@@ -13,8 +13,8 @@ default:
 build:
     cargo build --all-targets
 
-# Format check + clippy + tests — the same gates CI runs.
-check: fmt clippy test
+# Format check + clippy + tests across CI and local feature gates.
+check: fmt clippy test msrv doc
 
 fmt:
     cargo fmt --all -- --check
@@ -26,8 +26,11 @@ clippy:
     cargo clippy --all-features --all-targets -- -D warnings
 
 test:
-    cargo test --all-features
+    cargo test --all-features --all-targets
     cargo test --no-default-features --features ragas
+
+msrv:
+    cargo +1.89 build --all-targets
 
 doc:
     RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features

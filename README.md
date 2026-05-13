@@ -14,16 +14,22 @@ diff between runs to catch regressions before they ship.
 
 ## Status
 
-`v0.1.x` ships **retrieval-quality** evaluation only:
+The default build ships **retrieval-quality** evaluation only. The current
+unreleased branch also contains optional RAGAS judges and zero-waste ingestion
+tracks behind feature flags; knowledge-gain scoring remains planned.
 
-| Capability | v0.1 | v0.2 | v0.3 |
-| --- | :---: | :---: | :---: |
-| BEIR-style qrels loader | ✅ | ✅ | ✅ |
-| Recall / Precision / MRR / MAP / nDCG / HitRate | ✅ | ✅ | ✅ |
-| Async `RetrievalHarness` over any `VectorStoreIndex` | ✅ | ✅ | ✅ |
-| JSON / Markdown reports + baseline diff | ✅ | ✅ | ✅ |
-| RAGAS-style LLM judges (faithfulness, context_recall, …) | — | ✅ | ✅ |
-| Knowledge-gain scoring (per-doc Δ-recall + novelty) | — | — | ✅ |
+| Capability | Default | Feature | Validation |
+| --- | :---: | --- | --- |
+| BEIR-style qrels loader | ✅ | `retrieval` | Unit + harness integration tests |
+| Recall / Precision / MRR / MAP / nDCG / HitRate | ✅ | `retrieval` | Metric unit tests |
+| Async `RetrievalHarness` over any `VectorStoreIndexDyn` | ✅ | `retrieval` | `tests/harness.rs` |
+| JSON / Markdown reports + baseline diff | ✅ | `retrieval` | Report unit tests + harness test |
+| RAGAS-style LLM judges (faithfulness, context recall, …) | — | `ragas` | Unit tests with deterministic judge fixtures |
+| Zero-waste IoC ingestion | — | `ingestion` | `tests/ingestion_ioc.rs` |
+| Proposition distillation + redundancy checks | — | `ingestion` | `tests/ingestion_propositions.rs` |
+| Knowledge-graph triples + graph baseline | — | `ingestion-graph` | `tests/ingestion_graph.rs` |
+| LLM-backed ingestion extractors | — | `ingestion` | Model-independent fake-provider contract tests + optional live Ollama smoke |
+| Knowledge-gain scoring (per-doc Δ-recall + novelty) | — | planned | Not implemented |
 
 The crate-local maturity plan lives in [ROADMAP.md](ROADMAP.md). The fuller
 phased planning record, including out-of-scope items and reopen triggers, lives
@@ -31,6 +37,15 @@ in
 [`rig-contributions/docs/evals-rag-plan.md`](https://github.com/ForeverAngry/rig-contributions/blob/main/docs/evals-rag-plan.md).
 Cross-crate coordination lives in
 [`rig-contributions/docs/roadmap.md`](https://github.com/ForeverAngry/rig-contributions/blob/main/docs/roadmap.md).
+
+## Feature flags
+
+| Feature | Default | Enables |
+| --- | --- | --- |
+| `retrieval` | yes | Pure-Rust retrieval metrics, qrels loading, harness, reports, and diffs. |
+| `ragas` | no | LLM-backed RAGAS-style judges and `RagasHarness`. |
+| `ingestion` | no | Zero-waste ingestion Track 1 (IoCs), Track 3 (propositions), and LLM extractor adapters. |
+| `ingestion-graph` | no | Track 2 knowledge-graph triples plus `petgraph`-backed baseline. Implies `ingestion`. |
 
 ## Quickstart
 
@@ -72,8 +87,23 @@ println!("{}", diff.to_markdown());
 # Ok(()) }
 ```
 
-The diff refuses to compare reports whose `judge_fingerprint` differs — so
+The diff refuses to compare reports whose `judge_fingerprint` differs, so
 swapping an LLM judge never silently moves your score.
+
+## Optional ingestion checks
+
+The ingestion feature family moves quality control upstream of vector-store
+commit. Instead of storing every chunk and hoping retrieval compensates later,
+the pipeline emits an `IngestionDelta` containing net-new IoCs, propositions,
+and graph triples plus structured drop reasons for duplicates or redundant
+facts.
+
+Deterministic extractors and baselines are the CI path. `LlmTripleExtractor`
+and `LlmPropositionExtractor` adapt Rig's structured `Extractor` for hosts that
+want model-backed extraction; their contract tests use a fake `CompletionModel`
+so validation does not depend on a specific provider or local model. The ignored
+`live_ollama_ingestion` test remains a manual smoke test for tool-capable local
+models.
 
 ## Dataset format
 
@@ -85,8 +115,8 @@ swapping an LLM judge never silently moves your score.
 ```
 
 Grades are integers in `1..=N`; documents not listed are non-relevant
-(grade 0). The optional `reference_answer` field is reserved for the
-upcoming answer-level judges in v0.2.
+(grade 0). The optional `reference_answer` field is used by answer-level judges
+when the `ragas` feature is enabled.
 
 ## License
 

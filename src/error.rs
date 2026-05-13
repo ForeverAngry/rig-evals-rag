@@ -49,6 +49,14 @@ pub enum Error {
     /// metric set, etc.).
     #[error("baseline mismatch: {0}")]
     BaselineMismatch(String),
+
+    /// An ingestion-pipeline filter (IoC, graph, proposition) failed to
+    /// evaluate a document. The reason carries the failing track and a
+    /// human-readable cause; the offending document is identified by the
+    /// caller's `Document::id`.
+    #[cfg(feature = "ingestion")]
+    #[error("ingestion error: {0}")]
+    Ingestion(String),
 }
 
 /// Convenience alias.

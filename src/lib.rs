@@ -16,10 +16,9 @@
 //!
 //! ## Stability
 //!
-//! v0.1.x ships retrieval-quality evaluation only. The `ragas` feature adds
-//! LLM-based RAGAS-style judges (`FaithfulnessMetric`, `ContextPrecisionMetric`,
-//! `ContextRecallMetric`, `AnswerRelevanceMetric`) driven by
-//! [`ragas::RagasHarness`]. Knowledge-gain metrics remain planned for v0.3.
+//! The default build ships retrieval-quality evaluation only. Optional features
+//! add RAGAS-style judges and zero-waste ingestion checks while knowledge-gain
+//! metrics remain planned.
 
 #![deny(missing_docs)]
 #![deny(rust_2018_idioms)]
@@ -36,5 +35,23 @@ pub mod retrieval;
 pub use dataset::{GoldQuery, Qrels, RetrievedDoc, RetrievedSet};
 pub use error::{Error, Result};
 pub use harness::RetrievalHarness;
-pub use report::{MetricDelta, MetricReport, MultiReport, ReportDiff};
+pub use report::{MetricDelta, MetricReport, MultiReport, QueryDelta, RegressionGate, ReportDiff};
 pub use retrieval::{HitRateAtK, MapAtK, Mrr, NdcgAtK, PrecisionAtK, RecallAtK, RetrievalMetric};
+
+#[cfg(feature = "ingestion")]
+pub mod ingestion;
+
+#[cfg(feature = "ingestion-graph")]
+pub use ingestion::PetgraphBaseline;
+
+#[cfg(feature = "ingestion")]
+pub use ingestion::{
+    ActiveGraphTrack, ActivePropositionTrack, Chunk, ChunkLintConfig, ChunkLintReport,
+    ChunkLintWarning, ChunkStats, DistillationPipeline, Document, Dropped, DroppedItem,
+    DroppedReason, GraphBaseline, GraphTrack, InMemoryGraphBaseline, InMemoryIocBaseline,
+    IngestionDelta, IngestionReport, Ioc, IocBaseline, IocExtractor, IocKind,
+    LlmPropositionExtractor, LlmTripleExtractor, NoGraphTrack, NoPropositionTrack, Proposition,
+    PropositionExtractor, PropositionTrack, RedundancyCheck, RedundancyVerdict,
+    RegexIocExtractor, Section, SectionKind, StubPropositionExtractor, StubTripleExtractor,
+    Triple, TripleExtractor, VectorStoreRedundancyCheck, lint_chunks, lint_chunks_strict,
+};

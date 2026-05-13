@@ -178,8 +178,16 @@ impl MultiReport {
     }
 
     /// Diff this report against a baseline. Returns a [`ReportDiff`] with
-    /// per-metric Δ-mean. Fails if the two reports were produced with
-    /// different judge fingerprints (silent comparison drift).
+    /// per-metric Δ-mean and per-query winners/losers. Fails if the two
+    /// reports were produced with different judge fingerprints (silent
+    /// comparison drift).
+    ///
+    /// Per-query deltas are computed by intersecting the two reports'
+    /// `per_query` vectors on `query_id`. Queries missing from either side
+    /// are skipped (they cannot be compared). `winners`, `losers`, and
+    /// `unchanged` use an absolute threshold of `1e-9` to filter floating
+    /// point noise; callers needing different sensitivity should inspect
+    /// [`MetricDelta::query_changes`] directly.
     pub fn diff(&self, baseline: &MultiReport) -> Result<ReportDiff> {
         if self.judge_fingerprint != baseline.judge_fingerprint {
             return Err(Error::BaselineMismatch(format!(
@@ -187,23 +195,78 @@ impl MultiReport {
                 self.judge_fingerprint, baseline.judge_fingerprint
             )));
         }
-        let base_means: BTreeMap<&str, f64> = baseline
+        let base_by_name: BTreeMap<&str, &MetricReport> = baseline
             .metrics
             .iter()
-            .map(|m| (m.metric.as_str(), m.mean))
+            .map(|m| (m.metric.as_str(), m))
             .collect();
         let mut rows = Vec::with_capacity(self.metrics.len());
         for m in &self.metrics {
-            let baseline_mean = base_means.get(m.metric.as_str()).copied();
+            let base = base_by_name.get(m.metric.as_str()).copied();
+            let baseline_mean = base.map(|b| b.mean);
+            let (query_changes, winners, losers, unchanged) = match base {
+                Some(b) => compute_query_changes(&m.per_query, &b.per_query),
+                None => (Vec::new(), 0, 0, 0),
+            };
             rows.push(MetricDelta {
                 metric: m.metric.clone(),
                 current_mean: m.mean,
                 baseline_mean,
                 delta: baseline_mean.map(|b| m.mean - b),
+                winners,
+                losers,
+                unchanged,
+                query_changes,
             });
         }
         Ok(ReportDiff { rows })
     }
+}
+
+/// Floating-point noise floor used when bucketing per-query deltas into
+/// winners / losers / unchanged. Deltas with `|delta| <= EPSILON` count as
+/// unchanged.
+const EPSILON: f64 = 1e-9;
+
+/// Intersect per-query scores and return `(changes, winners, losers, unchanged)`.
+/// `changes` is sorted by `|delta|` descending so the largest movers are
+/// surfaced first.
+fn compute_query_changes(
+    current: &[(String, f64)],
+    baseline: &[(String, f64)],
+) -> (Vec<QueryDelta>, usize, usize, usize) {
+    let base_by_query: BTreeMap<&str, f64> =
+        baseline.iter().map(|(q, s)| (q.as_str(), *s)).collect();
+    let mut changes = Vec::new();
+    let mut winners = 0usize;
+    let mut losers = 0usize;
+    let mut unchanged = 0usize;
+    for (query_id, cur_score) in current {
+        let Some(base_score) = base_by_query.get(query_id.as_str()).copied() else {
+            continue;
+        };
+        let delta = cur_score - base_score;
+        if delta > EPSILON {
+            winners += 1;
+        } else if delta < -EPSILON {
+            losers += 1;
+        } else {
+            unchanged += 1;
+        }
+        changes.push(QueryDelta {
+            query_id: query_id.clone(),
+            current: *cur_score,
+            baseline: base_score,
+            delta,
+        });
+    }
+    changes.sort_by(|a, b| {
+        b.delta
+            .abs()
+            .partial_cmp(&a.delta.abs())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    (changes, winners, losers, unchanged)
 }
 
 /// Per-metric delta produced by [`MultiReport::diff`].
@@ -217,6 +280,35 @@ pub struct MetricDelta {
     pub baseline_mean: Option<f64>,
     /// `current_mean - baseline_mean`, if comparable.
     pub delta: Option<f64>,
+    /// Number of queries whose score improved relative to the baseline.
+    #[serde(default)]
+    pub winners: usize,
+    /// Number of queries whose score regressed relative to the baseline.
+    #[serde(default)]
+    pub losers: usize,
+    /// Number of queries whose score was unchanged (within floating-point
+    /// noise) relative to the baseline.
+    #[serde(default)]
+    pub unchanged: usize,
+    /// Per-query deltas for queries present in both reports, sorted by
+    /// `|delta|` descending. Empty if the metric was missing from the
+    /// baseline.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub query_changes: Vec<QueryDelta>,
+}
+
+/// Per-query score change for a single metric, produced by
+/// [`MultiReport::diff`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryDelta {
+    /// Gold-query identifier.
+    pub query_id: String,
+    /// Score on the current report.
+    pub current: f64,
+    /// Score on the baseline report.
+    pub baseline: f64,
+    /// `current - baseline`.
+    pub delta: f64,
 }
 
 /// Result of [`MultiReport::diff`].
@@ -227,12 +319,14 @@ pub struct ReportDiff {
 }
 
 impl ReportDiff {
-    /// Render the diff as a Markdown table.
+    /// Render the diff as a Markdown table including per-metric mean delta
+    /// and per-query winner/loser/unchanged counts. Per-query movers are
+    /// not inlined; inspect [`MetricDelta::query_changes`] for that detail.
     #[must_use]
     pub fn to_markdown(&self) -> String {
         let mut out = String::new();
-        out.push_str("| metric | current | baseline | Δ |\n");
-        out.push_str("|---|---:|---:|---:|\n");
+        out.push_str("| metric | current | baseline | Δ | win | lose | same |\n");
+        out.push_str("|---|---:|---:|---:|---:|---:|---:|\n");
         for r in &self.rows {
             let baseline = r
                 .baseline_mean
@@ -243,11 +337,77 @@ impl ReportDiff {
                 .map(|v| format!("{v:+.4}"))
                 .unwrap_or_else(|| "—".to_string());
             out.push_str(&format!(
-                "| {} | {:.4} | {} | {} |\n",
-                r.metric, r.current_mean, baseline, delta
+                "| {} | {:.4} | {} | {} | {} | {} | {} |\n",
+                r.metric, r.current_mean, baseline, delta, r.winners, r.losers, r.unchanged
             ));
         }
         out
+    }
+
+    /// Serialize as pretty-printed JSON.
+    pub fn to_json(&self) -> Result<String> {
+        Ok(serde_json::to_string_pretty(self)?)
+    }
+
+    /// Evaluate the diff against a [`RegressionGate`]. Returns the subset
+    /// of [`MetricDelta`] rows whose mean delta is more negative than the
+    /// configured threshold for that metric. Metrics not listed in the
+    /// gate are ignored.
+    #[must_use]
+    pub fn regressions(&self, gate: &RegressionGate) -> Vec<MetricDelta> {
+        self.rows
+            .iter()
+            .filter(|r| match (gate.threshold(&r.metric), r.delta) {
+                (Some(threshold), Some(delta)) => delta < -threshold,
+                _ => false,
+            })
+            .cloned()
+            .collect()
+    }
+}
+
+/// Threshold-based regression gate over a [`ReportDiff`].
+///
+/// Each entry maps a metric name to the **minimum tolerated drop** in mean
+/// score: a metric regresses when its `delta` is more negative than
+/// `-threshold`. Thresholds are non-negative; negative values are clamped
+/// to zero on insert.
+///
+/// ```
+/// use rig_evals_rag::RegressionGate;
+///
+/// let gate = RegressionGate::new()
+///     .with_threshold("recall@10", 0.02)
+///     .with_threshold("ndcg@10", 0.01);
+/// assert_eq!(gate.threshold("recall@10"), Some(0.02));
+/// assert_eq!(gate.threshold("mrr"), None);
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct RegressionGate {
+    thresholds: BTreeMap<String, f64>,
+}
+
+impl RegressionGate {
+    /// Build an empty gate. Metrics added via
+    /// [`RegressionGate::with_threshold`] participate in regression checks;
+    /// any others are ignored.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Register `threshold` as the maximum tolerated drop in mean score
+    /// for `metric`. Negative values are clamped to `0.0`.
+    #[must_use]
+    pub fn with_threshold(mut self, metric: impl Into<String>, threshold: f64) -> Self {
+        self.thresholds.insert(metric.into(), threshold.max(0.0));
+        self
+    }
+
+    /// Threshold registered for `metric`, if any.
+    #[must_use]
+    pub fn threshold(&self, metric: &str) -> Option<f64> {
+        self.thresholds.get(metric).copied()
     }
 }
 
@@ -297,5 +457,101 @@ mod tests {
         assert_eq!(diff.rows.len(), 1);
         let row = &diff.rows[0];
         assert!((row.delta.unwrap_or(0.0) - 0.2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn diff_buckets_per_query_winners_losers_and_unchanged() {
+        let cur = MultiReport::new(vec![MetricReport::from_per_query(
+            "recall@10".into(),
+            vec![
+                ("q1".into(), 1.0), // winner: 0.5 -> 1.0
+                ("q2".into(), 0.0), // loser:  0.5 -> 0.0
+                ("q3".into(), 0.5), // unchanged
+                ("q4".into(), 0.9), // current-only, skipped
+            ],
+        )]);
+        let base = MultiReport::new(vec![MetricReport::from_per_query(
+            "recall@10".into(),
+            vec![
+                ("q1".into(), 0.5),
+                ("q2".into(), 0.5),
+                ("q3".into(), 0.5),
+                ("q5".into(), 1.0), // baseline-only, skipped
+            ],
+        )]);
+        let diff = cur.diff(&base).unwrap();
+        let row = &diff.rows[0];
+        assert_eq!(row.winners, 1);
+        assert_eq!(row.losers, 1);
+        assert_eq!(row.unchanged, 1);
+        // q4 / q5 are skipped because they are not in both reports.
+        assert_eq!(row.query_changes.len(), 3);
+        // Sorted by |delta| desc: q1 and q2 tie at 0.5, q3 at 0.0.
+        assert_eq!(row.query_changes[2].query_id, "q3");
+        assert!((row.query_changes[2].delta).abs() < 1e-9);
+    }
+
+    #[test]
+    fn diff_query_changes_empty_when_baseline_missing_metric() {
+        let cur = MultiReport::new(vec![MetricReport::from_per_query(
+            "ndcg@10".into(),
+            vec![("q1".into(), 0.9)],
+        )]);
+        let base = MultiReport::new(vec![]);
+        let diff = cur.diff(&base).unwrap();
+        let row = &diff.rows[0];
+        assert!(row.delta.is_none());
+        assert_eq!(row.winners, 0);
+        assert_eq!(row.losers, 0);
+        assert_eq!(row.unchanged, 0);
+        assert!(row.query_changes.is_empty());
+    }
+
+    #[test]
+    fn regression_gate_flags_only_metrics_below_threshold() {
+        // recall@10 drops 0.10 (regression), ndcg@10 drops 0.005 (within
+        // tolerance), mrr is not in the gate (ignored).
+        let cur = MultiReport::new(vec![
+            MetricReport::from_per_query("recall@10".into(), vec![("q1".into(), 0.50)]),
+            MetricReport::from_per_query("ndcg@10".into(), vec![("q1".into(), 0.595)]),
+            MetricReport::from_per_query("mrr".into(), vec![("q1".into(), 0.10)]),
+        ]);
+        let base = MultiReport::new(vec![
+            MetricReport::from_per_query("recall@10".into(), vec![("q1".into(), 0.60)]),
+            MetricReport::from_per_query("ndcg@10".into(), vec![("q1".into(), 0.60)]),
+            MetricReport::from_per_query("mrr".into(), vec![("q1".into(), 0.90)]),
+        ]);
+        let diff = cur.diff(&base).unwrap();
+        let gate = RegressionGate::new()
+            .with_threshold("recall@10", 0.02)
+            .with_threshold("ndcg@10", 0.02);
+        let regressed = diff.regressions(&gate);
+        assert_eq!(regressed.len(), 1);
+        assert_eq!(regressed[0].metric, "recall@10");
+    }
+
+    #[test]
+    fn regression_gate_clamps_negative_thresholds() {
+        let gate = RegressionGate::new().with_threshold("recall@10", -0.5);
+        assert_eq!(gate.threshold("recall@10"), Some(0.0));
+    }
+
+    #[test]
+    fn report_diff_to_json_round_trips() {
+        let cur = MultiReport::new(vec![MetricReport::from_per_query(
+            "recall@10".into(),
+            vec![("q1".into(), 1.0), ("q2".into(), 0.0)],
+        )]);
+        let base = MultiReport::new(vec![MetricReport::from_per_query(
+            "recall@10".into(),
+            vec![("q1".into(), 0.5), ("q2".into(), 0.5)],
+        )]);
+        let diff = cur.diff(&base).unwrap();
+        let json = diff.to_json().unwrap();
+        let parsed: ReportDiff = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.rows.len(), 1);
+        assert_eq!(parsed.rows[0].winners, 1);
+        assert_eq!(parsed.rows[0].losers, 1);
+        assert_eq!(parsed.rows[0].query_changes.len(), 2);
     }
 }
