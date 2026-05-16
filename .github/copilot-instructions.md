@@ -36,5 +36,5 @@ or `rig-mcp`. It exists to evaluate retrievers built on top of them via the
 ## Planning reference
 
 The authoritative spec is
-[`rig-contributions/docs/evals-rag-plan.md`](https://github.com/ForeverAngry/rig-contributions/blob/main/docs/evals-rag-plan.md).
+[`rig-ecosystem/docs/evals-rag-plan.md`](https://github.com/ForeverAngry/rig-ecosystem/blob/main/docs/evals-rag-plan.md).
 Out-of-scope items and reopen triggers are catalogued there.

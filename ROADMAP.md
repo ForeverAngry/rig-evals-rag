@@ -1,6 +1,6 @@
 # rig-evals-rag Roadmap
 
-This roadmap is the crate-local operating plan for `rig-evals-rag`. The cross-crate coordination summary lives in [`rig-contributions/docs/roadmap.md`](../rig-contributions/docs/roadmap.md). The fuller planning record for phased evaluation work remains in [`../rig-contributions/docs/evals-rag-plan.md`](../rig-contributions/docs/evals-rag-plan.md).
+This roadmap is the crate-local operating plan for `rig-evals-rag`. The cross-crate coordination summary lives in [`rig-ecosystem/docs/roadmap.md`](../rig-ecosystem/docs/roadmap.md). The fuller planning record for phased evaluation work remains in [`../rig-ecosystem/docs/evals-rag-plan.md`](../rig-ecosystem/docs/evals-rag-plan.md).
 
 ## Role
 

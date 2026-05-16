@@ -34,9 +34,9 @@ tracks behind feature flags; knowledge-gain scoring remains planned.
 The crate-local maturity plan lives in [ROADMAP.md](ROADMAP.md). The fuller
 phased planning record, including out-of-scope items and reopen triggers, lives
 in
-[`rig-contributions/docs/evals-rag-plan.md`](https://github.com/ForeverAngry/rig-contributions/blob/main/docs/evals-rag-plan.md).
+[`rig-ecosystem/docs/evals-rag-plan.md`](https://github.com/ForeverAngry/rig-ecosystem/blob/main/docs/evals-rag-plan.md).
 Cross-crate coordination lives in
-[`rig-contributions/docs/roadmap.md`](https://github.com/ForeverAngry/rig-contributions/blob/main/docs/roadmap.md).
+[`rig-ecosystem/docs/roadmap.md`](https://github.com/ForeverAngry/rig-ecosystem/blob/main/docs/roadmap.md).
 
 ## Feature flags
 
