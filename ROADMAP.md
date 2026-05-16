@@ -15,6 +15,8 @@ This roadmap is the crate-local operating plan for `rig-evals-rag`. The cross-cr
 - Off-by-default `ragas` feature with RAGAS-style judges, `RagasHarness`, bounded-concurrency judge calls, XML-fenced prompts, abstention scores, and judge fingerprint diff protection.
 - Off-by-default `ingestion` feature with zero-waste ingestion deltas, deterministic IoC extraction, proposition extraction, redundancy checks, and model-independent contract tests for LLM-backed proposition extractors.
 - Off-by-default `ingestion-graph` sub-feature with knowledge-graph triples, in-memory and `petgraph` baselines, and model-independent contract tests for LLM-backed triple extractors.
+- Repeated-trial reliability reporting with thresholded pass@k and pass^k over
+  shared `MetricReport`s.
 
 ## Prototype Grade
 
@@ -22,7 +24,7 @@ This roadmap is the crate-local operating plan for `rig-evals-rag`. The cross-cr
 - Zero-waste ingestion tracks are merged and covered by deterministic tests; chunk-stat linting, language/encoding linting, and MinHash-style near-duplicate detection remain planned.
 - There is no committed `eval_memvid.rs` integration example yet.
 - Knowledge-gain scoring and shadow-store contracts remain planned.
-- Bootstrap confidence intervals and CI regression gates are not implemented.
+- Bootstrap confidence intervals and non-zero CI regression exits are not implemented.
 
 ## Next Work
 

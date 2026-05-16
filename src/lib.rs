@@ -35,11 +35,17 @@ pub mod retrieval;
 pub use dataset::{GoldQuery, Qrels, RetrievedDoc, RetrievedSet};
 pub use error::{Error, Result};
 pub use harness::RetrievalHarness;
-pub use report::{MetricDelta, MetricReport, MultiReport, QueryDelta, RegressionGate, ReportDiff};
+pub use report::{
+    MetricDelta, MetricReport, MultiReport, QueryDelta, QueryReliability, RegressionGate,
+    ReliabilityReport, ReportDiff,
+};
 pub use retrieval::{HitRateAtK, MapAtK, Mrr, NdcgAtK, PrecisionAtK, RecallAtK, RetrievalMetric};
 
 #[cfg(feature = "ingestion")]
 pub mod ingestion;
+
+#[cfg(feature = "skills")]
+pub mod skills;
 
 #[cfg(feature = "ingestion-graph")]
 pub use ingestion::PetgraphBaseline;
@@ -51,7 +57,7 @@ pub use ingestion::{
     DroppedReason, GraphBaseline, GraphTrack, InMemoryGraphBaseline, InMemoryIocBaseline,
     IngestionDelta, IngestionReport, Ioc, IocBaseline, IocExtractor, IocKind,
     LlmPropositionExtractor, LlmTripleExtractor, NoGraphTrack, NoPropositionTrack, Proposition,
-    PropositionExtractor, PropositionTrack, RedundancyCheck, RedundancyVerdict,
-    RegexIocExtractor, Section, SectionKind, StubPropositionExtractor, StubTripleExtractor,
-    Triple, TripleExtractor, VectorStoreRedundancyCheck, lint_chunks, lint_chunks_strict,
+    PropositionExtractor, PropositionTrack, RedundancyCheck, RedundancyVerdict, RegexIocExtractor,
+    Section, SectionKind, StubPropositionExtractor, StubTripleExtractor, Triple, TripleExtractor,
+    VectorStoreRedundancyCheck, lint_chunks, lint_chunks_strict,
 };

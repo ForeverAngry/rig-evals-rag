@@ -5,6 +5,8 @@
 //!
 //! - [`MetricReport`] — aggregates a single metric across all queries (mean,
 //!   stddev, P50/P95, min/max, per-query scores).
+//! - [`ReliabilityReport`] — aggregates repeated trials for one metric into
+//!   pass@k / pass^k reliability estimates.
 //! - [`MultiReport`]  — bundles several [`MetricReport`]s with optional
 //!   metadata (dataset id, store kind, judge fingerprint) so reports can be
 //!   diffed across runs.
@@ -103,6 +105,262 @@ fn percentile(sorted: &[f64], q: f64) -> f64 {
     let hi_v = sorted.get(hi).copied().unwrap_or(lo_v);
     let frac = rank - lo as f64;
     lo_v + (hi_v - lo_v) * frac
+}
+
+/// Reliability summary for one query across repeated trials of the same
+/// metric.
+///
+/// A trial counts as successful when its score is greater than or equal to
+/// [`ReliabilityReport::threshold`]. The per-query pass@k estimate is the
+/// probability that at least one of `k` sampled trials succeeds; pass^k is
+/// the probability that all `k` sampled trials succeed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryReliability {
+    /// Gold-query identifier.
+    pub query_id: String,
+    /// Number of repeated trials observed for this query.
+    pub trials: usize,
+    /// Number of trials whose score met or exceeded the threshold.
+    pub successes: usize,
+    /// `successes / trials`.
+    pub pass_rate: f64,
+    /// Empirical pass@k estimate for this query.
+    pub pass_at_k: f64,
+    /// Empirical pass^k estimate for this query.
+    pub pass_all_k: f64,
+}
+
+/// Repeated-trial reliability report for a single metric.
+///
+/// This report turns a set of repeated [`MetricReport`]s for the same metric
+/// into reliability estimates. Scores are thresholded into pass/fail outcomes
+/// first, then pass@k and pass^k are estimated per query and averaged.
+///
+/// ```
+/// use rig_evals_rag::{MetricReport, ReliabilityReport};
+///
+/// let trial_a = MetricReport::from_per_query(
+///     "recall@10".into(),
+///     vec![("q1".into(), 1.0), ("q2".into(), 0.0)],
+/// );
+/// let trial_b = MetricReport::from_per_query(
+///     "recall@10".into(),
+///     vec![("q1".into(), 1.0), ("q2".into(), 1.0)],
+/// );
+///
+/// let reliability = ReliabilityReport::from_metric_reports(
+///     "recall@10",
+///     1.0,
+///     2,
+///     &[trial_a, trial_b],
+/// )?;
+/// assert_eq!(reliability.n_queries, 2);
+/// assert_eq!(reliability.trials_per_query, 2);
+/// # Ok::<(), rig_evals_rag::Error>(())
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReliabilityReport {
+    /// Metric identifier shared by every trial report.
+    pub metric: String,
+    /// Score threshold used to convert each trial into pass/fail.
+    pub threshold: f64,
+    /// Number of attempts sampled in pass@k / pass^k estimates.
+    pub k: usize,
+    /// Number of queries included in the reliability estimate.
+    pub n_queries: usize,
+    /// Number of trials observed for each query.
+    pub trials_per_query: usize,
+    /// Mean per-query pass rate.
+    pub mean_pass_rate: f64,
+    /// Mean per-query pass@k.
+    pub pass_at_k: f64,
+    /// Mean per-query pass^k.
+    pub pass_all_k: f64,
+    /// Per-query reliability rows, in the first trial report's query order.
+    pub per_query: Vec<QueryReliability>,
+}
+
+impl ReliabilityReport {
+    /// Build a repeated-trial reliability report from multiple
+    /// [`MetricReport`]s for the same metric.
+    ///
+    /// Every report must contain the same query ids exactly once. `k` must be
+    /// in `1..=reports.len()`. Scores must be finite.
+    pub fn from_metric_reports(
+        metric: impl Into<String>,
+        threshold: f64,
+        k: usize,
+        reports: &[MetricReport],
+    ) -> Result<Self> {
+        let metric = metric.into();
+        if reports.is_empty() {
+            return Err(Error::Config(
+                "at least one trial report is required".into(),
+            ));
+        }
+        if k == 0 {
+            return Err(Error::Config("pass@k requires k > 0".into()));
+        }
+        if !threshold.is_finite() {
+            return Err(Error::Config("reliability threshold must be finite".into()));
+        }
+        if k > reports.len() {
+            return Err(Error::Config(format!(
+                "pass@k k={} exceeds trial count {}",
+                k,
+                reports.len()
+            )));
+        }
+
+        for report in reports {
+            if report.metric != metric {
+                return Err(Error::BaselineMismatch(format!(
+                    "metric mismatch: expected {metric}, got {}",
+                    report.metric
+                )));
+            }
+        }
+
+        let first = reports
+            .first()
+            .ok_or_else(|| Error::Config("at least one trial report is required".into()))?;
+        let mut query_order = Vec::with_capacity(first.per_query.len());
+        let mut seen = std::collections::BTreeSet::new();
+        for (query_id, score) in &first.per_query {
+            if !score.is_finite() {
+                return Err(Error::Config(format!(
+                    "non-finite score for query {query_id}"
+                )));
+            }
+            if !seen.insert(query_id.as_str()) {
+                return Err(Error::BaselineMismatch(format!(
+                    "duplicate query id in trial report: {query_id}"
+                )));
+            }
+            query_order.push(query_id.clone());
+        }
+
+        let mut scores_by_query: BTreeMap<String, Vec<f64>> = query_order
+            .iter()
+            .map(|query_id| (query_id.clone(), Vec::with_capacity(reports.len())))
+            .collect();
+
+        for report in reports {
+            let mut report_scores = BTreeMap::new();
+            for (query_id, score) in &report.per_query {
+                if !score.is_finite() {
+                    return Err(Error::Config(format!(
+                        "non-finite score for query {query_id}"
+                    )));
+                }
+                if report_scores.insert(query_id.as_str(), *score).is_some() {
+                    return Err(Error::BaselineMismatch(format!(
+                        "duplicate query id in trial report: {query_id}"
+                    )));
+                }
+            }
+            if report_scores.len() != query_order.len() {
+                return Err(Error::BaselineMismatch(format!(
+                    "trial report has {} queries; expected {}",
+                    report_scores.len(),
+                    query_order.len()
+                )));
+            }
+            for query_id in &query_order {
+                let Some(score) = report_scores.get(query_id.as_str()).copied() else {
+                    return Err(Error::BaselineMismatch(format!(
+                        "trial report missing query id {query_id}"
+                    )));
+                };
+                let Some(scores) = scores_by_query.get_mut(query_id) else {
+                    return Err(Error::BaselineMismatch(format!(
+                        "unexpected query id {query_id}"
+                    )));
+                };
+                scores.push(score);
+            }
+        }
+
+        let mut per_query = Vec::with_capacity(query_order.len());
+        for query_id in query_order {
+            let Some(scores) = scores_by_query.remove(&query_id) else {
+                return Err(Error::BaselineMismatch(format!(
+                    "missing scores for query id {query_id}"
+                )));
+            };
+            per_query.push(query_reliability(query_id, &scores, threshold, k));
+        }
+
+        let n_queries = per_query.len();
+        let trials_per_query = reports.len();
+        let mean_pass_rate = mean_by(&per_query, |q| q.pass_rate);
+        let pass_at_k = mean_by(&per_query, |q| q.pass_at_k);
+        let pass_all_k = mean_by(&per_query, |q| q.pass_all_k);
+
+        Ok(Self {
+            metric,
+            threshold,
+            k,
+            n_queries,
+            trials_per_query,
+            mean_pass_rate,
+            pass_at_k,
+            pass_all_k,
+            per_query,
+        })
+    }
+}
+
+fn query_reliability(
+    query_id: String,
+    scores: &[f64],
+    threshold: f64,
+    k: usize,
+) -> QueryReliability {
+    let trials = scores.len();
+    let successes = scores.iter().filter(|score| **score >= threshold).count();
+    let pass_rate = if trials == 0 {
+        0.0
+    } else {
+        successes as f64 / trials as f64
+    };
+    QueryReliability {
+        query_id,
+        trials,
+        successes,
+        pass_rate,
+        pass_at_k: pass_at_k_estimate(trials, successes, k),
+        pass_all_k: pass_all_k_estimate(trials, successes, k),
+    }
+}
+
+fn mean_by(rows: &[QueryReliability], f: impl Fn(&QueryReliability) -> f64) -> f64 {
+    if rows.is_empty() {
+        return 0.0;
+    }
+    rows.iter().map(f).sum::<f64>() / rows.len() as f64
+}
+
+fn pass_at_k_estimate(trials: usize, successes: usize, k: usize) -> f64 {
+    if k == 0 || trials == 0 || successes == 0 {
+        return 0.0;
+    }
+    if k > trials || trials - successes < k {
+        return 1.0;
+    }
+    let fail_all = (0..k).fold(1.0, |acc, offset| {
+        acc * ((trials - successes - offset) as f64 / (trials - offset) as f64)
+    });
+    1.0 - fail_all
+}
+
+fn pass_all_k_estimate(trials: usize, successes: usize, k: usize) -> f64 {
+    if k == 0 || trials == 0 || successes < k || k > trials {
+        return 0.0;
+    }
+    (0..k).fold(1.0, |acc, offset| {
+        acc * ((successes - offset) as f64 / (trials - offset) as f64)
+    })
 }
 
 /// A bundle of [`MetricReport`]s with optional run metadata, suitable for
@@ -553,5 +811,101 @@ mod tests {
         assert_eq!(parsed.rows[0].winners, 1);
         assert_eq!(parsed.rows[0].losers, 1);
         assert_eq!(parsed.rows[0].query_changes.len(), 2);
+    }
+
+    #[test]
+    fn reliability_report_computes_pass_at_k_and_pass_all_k() {
+        let reports = vec![
+            MetricReport::from_per_query(
+                "recall@10".into(),
+                vec![("q1".into(), 1.0), ("q2".into(), 0.0)],
+            ),
+            MetricReport::from_per_query(
+                "recall@10".into(),
+                vec![("q1".into(), 0.0), ("q2".into(), 1.0)],
+            ),
+            MetricReport::from_per_query(
+                "recall@10".into(),
+                vec![("q1".into(), 1.0), ("q2".into(), 0.0)],
+            ),
+        ];
+
+        let reliability =
+            ReliabilityReport::from_metric_reports("recall@10", 1.0, 2, &reports).unwrap();
+
+        assert_eq!(reliability.n_queries, 2);
+        assert_eq!(reliability.trials_per_query, 3);
+        assert!((reliability.mean_pass_rate - 0.5).abs() < 1e-9);
+        // q1: 2/3 successes => pass@2 = 1.0, pass^2 = 1/3.
+        // q2: 1/3 successes => pass@2 = 2/3, pass^2 = 0.0.
+        assert!((reliability.pass_at_k - (5.0 / 6.0)).abs() < 1e-9);
+        assert!((reliability.pass_all_k - (1.0 / 6.0)).abs() < 1e-9);
+        assert_eq!(reliability.per_query[0].query_id, "q1");
+        assert_eq!(reliability.per_query[0].successes, 2);
+    }
+
+    #[test]
+    fn reliability_report_requires_matching_metrics() {
+        let reports = vec![
+            MetricReport::from_per_query("recall@10".into(), vec![("q1".into(), 1.0)]),
+            MetricReport::from_per_query("ndcg@10".into(), vec![("q1".into(), 1.0)]),
+        ];
+
+        let err =
+            ReliabilityReport::from_metric_reports("recall@10", 1.0, 1, &reports).unwrap_err();
+
+        match err {
+            Error::BaselineMismatch(message) => assert!(message.contains("metric mismatch")),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn reliability_report_requires_same_queries() {
+        let reports = vec![
+            MetricReport::from_per_query("recall@10".into(), vec![("q1".into(), 1.0)]),
+            MetricReport::from_per_query("recall@10".into(), vec![("q2".into(), 1.0)]),
+        ];
+
+        let err =
+            ReliabilityReport::from_metric_reports("recall@10", 1.0, 1, &reports).unwrap_err();
+
+        match err {
+            Error::BaselineMismatch(message) => assert!(message.contains("missing query id")),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn reliability_report_rejects_k_larger_than_trials() {
+        let reports = vec![MetricReport::from_per_query(
+            "recall@10".into(),
+            vec![("q1".into(), 1.0)],
+        )];
+
+        let err =
+            ReliabilityReport::from_metric_reports("recall@10", 1.0, 2, &reports).unwrap_err();
+
+        match err {
+            Error::Config(message) => assert!(message.contains("exceeds trial count")),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn reliability_report_serializes() {
+        let reports = vec![MetricReport::from_per_query(
+            "recall@10".into(),
+            vec![("q1".into(), 1.0)],
+        )];
+
+        let reliability =
+            ReliabilityReport::from_metric_reports("recall@10", 1.0, 1, &reports).unwrap();
+        let json = serde_json::to_string(&reliability).unwrap();
+        let parsed: ReliabilityReport = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.metric, "recall@10");
+        assert_eq!(parsed.per_query.len(), 1);
+        assert!((parsed.pass_at_k - 1.0).abs() < 1e-9);
     }
 }
