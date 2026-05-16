@@ -93,10 +93,7 @@ impl IngestionReport {
     /// Fold one delta's counts into the report.
     pub fn push(&mut self, delta: &IngestionDelta) {
         self.documents = self.documents.saturating_add(1);
-        self.iocs.accepted = self
-            .iocs
-            .accepted
-            .saturating_add(delta.iocs.len() as u64);
+        self.iocs.accepted = self.iocs.accepted.saturating_add(delta.iocs.len() as u64);
         self.propositions.accepted = self
             .propositions
             .accepted
@@ -283,7 +280,10 @@ mod tests {
 
     #[test]
     fn from_deltas_reconciles_totals() {
-        let deltas = vec![delta_with_one_of_everything(), delta_with_one_of_everything()];
+        let deltas = vec![
+            delta_with_one_of_everything(),
+            delta_with_one_of_everything(),
+        ];
         let report = IngestionReport::from_deltas(&deltas);
 
         assert_eq!(report.documents, 2);

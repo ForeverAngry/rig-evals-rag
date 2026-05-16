@@ -303,9 +303,7 @@ pub fn lint_chunks(chunks: &[Chunk], config: &ChunkLintConfig) -> ChunkLintRepor
         });
     }
     if missing_ids > 0 {
-        warnings.push(ChunkLintWarning::MissingIds {
-            count: missing_ids,
-        });
+        warnings.push(ChunkLintWarning::MissingIds { count: missing_ids });
     }
 
     ChunkLintReport { stats, warnings }

@@ -8,7 +8,63 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped `rig-core` dependency from `0.36.0` to `0.37.0` and aliased the
+  package as `rig` (`rig = { package = "rig-core", version = "0.37.0",
+  default-features = false }`) to absorb upstream's library-name change.
+  Source `use rig::…` paths are unchanged. `Chat::chat` history-append
+  semantics in 0.37 are not exercised by this crate (no call sites). Full
+  `just check` matrix is clean under the bump.
+
 ### Added
+
+- `SkillTaskSet` JSONL I/O (requires `skills`): `load_jsonl`,
+  `load_jsonl_with_id`, `from_jsonl_str`, `to_jsonl_string`, and
+  `save_jsonl` let skill suites live as versioned data files instead of
+  Rust literals. Parse errors reuse the existing line-numbered
+  `DatasetParse` error shape.
+- `skills_basic` example (requires `skills`) showing the full local flow:
+  load a JSONL task suite, run a deterministic `AgentRunner`, mix
+  contains / tool-call / trigger graders, and emit a JSON report. No
+  provider keys or network calls required.
+- `RetrievalGroundednessGrader` (requires `skills`): async grader that
+  re-queries any [`VectorStoreIndexDyn`] with a `(task, transcript)`
+  extract (default: `transcript.final_output`), retrieves the top-`k`
+  documents, and scores the answer against the concatenated context.
+  Default scorer is token-recall (no LLM in the loop); both the query
+  derivation, scorer, and document extractor are pluggable closures.
+  Closes the loop between the skill harness and this crate's primary
+  surface — the retriever under evaluation.
+- `AsyncGrader` trait (in `skills`) for graders that need to `.await`
+  during scoring. Every existing deterministic [`Grader`] auto-implements
+  it via a blanket impl, so existing code keeps working with a one-line
+  type swap (`Vec<Box<dyn Grader>>` → `Vec<Box<dyn AsyncGrader>>`). The
+  harness now drives `AsyncGrader` directly so LLM-rubric judges can sit
+  alongside deterministic checks in the same registry.
+- `RagasJudgeGrader` (requires `skills` + `ragas`): wraps any
+  `RagasMetric` (`FaithfulnessMetric`, `AnswerRelevanceMetric`,
+  `ContextPrecisionMetric`, `ContextRecallMetric`, or a custom impl) as
+  an `AsyncGrader`. Pass threshold is configurable; raw judge score is
+  preserved in the outcome `notes` for audit. The default mapping uses
+  `task.prompt → query` and `transcript.final_output → answer`; override
+  via `with_inputs_fn` for context-aware judges.
+- New optional `skills` feature: deterministic skill / agent evaluation
+  harness alongside the existing retrieval one. Adds
+  `rig_evals_rag::skills::{SkillHarness, SkillTask, SkillTaskSet,
+  AgentRunner, Transcript, ToolCall, Usage, Grader, GraderOutcome,
+  ContainsGrader, ToolCallGrader, TranscriptBudget, TriggerGrader,
+  SkillEvalReport, TrialRow}`. The harness runs `(tasks × trials)`,
+  applies deterministic graders to captured transcripts, and reuses the
+  existing `MetricReport` / `ReliabilityReport` (pass@k / pass^k)
+  aggregation. LLM-rubric judging is intentionally out of scope for
+  this feature — users wanting rubric scoring can pair the existing
+  `ragas` feature with a custom `Grader`. Zero new dependencies.
+- `ReliabilityReport` / `QueryReliability` aggregate repeated
+  `MetricReport`s for the same metric into thresholded pass/fail reliability
+  estimates: mean pass rate, pass@k (at least one success in k attempts),
+  and pass^k (all k attempts succeed), with per-query breakdowns and
+  validation that trial reports share the same metric and query set.
 - `ReportDiff` now carries per-query winners/losers/unchanged counts and
   a sorted `query_changes: Vec<QueryDelta>` listing the largest movers per
   metric, computed by intersecting the two reports' `per_query` vectors on
@@ -86,6 +142,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [0.1.0] - TBD
 
 ### Added
+
 - BEIR-compatible JSONL qrels loader (`Qrels::load_jsonl`).
 - `RetrievalMetric` trait + concrete implementations: `RecallAtK`,
   `PrecisionAtK`, `HitRateAtK`, `Mrr`, `MapAtK`, `NdcgAtK`.

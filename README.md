@@ -24,6 +24,7 @@ tracks behind feature flags; knowledge-gain scoring remains planned.
 | Recall / Precision / MRR / MAP / nDCG / HitRate | ✅ | `retrieval` | Metric unit tests |
 | Async `RetrievalHarness` over any `VectorStoreIndexDyn` | ✅ | `retrieval` | `tests/harness.rs` |
 | JSON / Markdown reports + baseline diff | ✅ | `retrieval` | Report unit tests + harness test |
+| Repeated-trial pass@k / pass^k reliability reports | ✅ | `retrieval` | Report unit tests |
 | RAGAS-style LLM judges (faithfulness, context recall, …) | — | `ragas` | Unit tests with deterministic judge fixtures |
 | Zero-waste IoC ingestion | — | `ingestion` | `tests/ingestion_ioc.rs` |
 | Proposition distillation + redundancy checks | — | `ingestion` | `tests/ingestion_propositions.rs` |
@@ -89,6 +90,32 @@ println!("{}", diff.to_markdown());
 
 The diff refuses to compare reports whose `judge_fingerprint` differs, so
 swapping an LLM judge never silently moves your score.
+
+### Repeated-trial reliability
+
+When a retriever, RAG pipeline, or judge is stochastic, run the same suite
+multiple times and aggregate the resulting `MetricReport`s into pass@k and
+pass^k estimates:
+
+```rust,no_run
+# use rig_evals_rag::{MetricReport, ReliabilityReport};
+# fn demo(trials: Vec<MetricReport>) -> anyhow::Result<()> {
+let reliability = ReliabilityReport::from_metric_reports(
+    "recall@10",
+    1.0, // score threshold counted as a pass
+    3,   // k attempts
+    &trials,
+)?;
+
+println!("pass@3={:.3}", reliability.pass_at_k);
+println!("pass^3={:.3}", reliability.pass_all_k);
+# Ok(()) }
+```
+
+`pass@k` estimates whether at least one of `k` attempts succeeds; `pass^k`
+estimates whether all `k` attempts succeed. The same helper works for pure
+retrieval reports and `ragas` judge reports because it operates on the shared
+report layer.
 
 ## Optional ingestion checks
 

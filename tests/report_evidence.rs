@@ -46,9 +46,7 @@ fn report_diff_json_round_trips_with_stable_gate_verdict() {
     let regressed_reloaded = reloaded.regressions(&gate);
     assert_eq!(regressed_reloaded.len(), 1);
     assert_eq!(regressed_reloaded[0].metric, regressed_live[0].metric);
-    assert!(
-        (regressed_reloaded[0].delta.unwrap() - regressed_live[0].delta.unwrap()).abs() < 1e-9
-    );
+    assert!((regressed_reloaded[0].delta.unwrap() - regressed_live[0].delta.unwrap()).abs() < 1e-9);
 }
 
 /// A non-regressing diff produces an empty regression set both live
