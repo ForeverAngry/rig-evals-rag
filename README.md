@@ -15,8 +15,9 @@ diff between runs to catch regressions before they ship.
 ## Status
 
 The default build ships **retrieval-quality** evaluation only. The current
-unreleased branch also contains optional RAGAS judges and zero-waste ingestion
-tracks behind feature flags; knowledge-gain scoring remains planned.
+unreleased branch also contains optional RAGAS judges, zero-waste ingestion
+tracks, shadow scoring, and model-free knowledge-gain scoring behind feature
+flags.
 
 | Capability | Default | Feature | Validation |
 | --- | :---: | --- | --- |
@@ -25,12 +26,16 @@ tracks behind feature flags; knowledge-gain scoring remains planned.
 | Async `RetrievalHarness` over any `VectorStoreIndexDyn` | ✅ | `retrieval` | `tests/harness.rs` |
 | JSON / Markdown reports + baseline diff | ✅ | `retrieval` | Report unit tests + harness test |
 | Repeated-trial pass@k / pass^k reliability reports | ✅ | `retrieval` | Report unit tests |
+| Pre/post shadow-store scoring | — | `shadow` | `tests/shadow.rs` |
+| Model-free knowledge-gain scoring | — | `knowledge-gain` | Unit tests + `eval_memvid` |
+| Candidate-document gain ranking + host novelty | — | `knowledge-gain` | Unit tests + `eval_memvid` |
+| Generic embedding novelty adapter | — | `embedding-novelty` | Deterministic fake-model unit test |
 | RAGAS-style LLM judges (faithfulness, context recall, …) | — | `ragas` | Unit tests with deterministic judge fixtures |
 | Zero-waste IoC ingestion | — | `ingestion` | `tests/ingestion_ioc.rs` |
 | Proposition distillation + redundancy checks | — | `ingestion` | `tests/ingestion_propositions.rs` |
 | Knowledge-graph triples + graph baseline | — | `ingestion-graph` | `tests/ingestion_graph.rs` |
 | LLM-backed ingestion extractors | — | `ingestion` | Model-independent fake-provider contract tests + optional live Ollama smoke |
-| Knowledge-gain scoring (per-doc Δ-recall + novelty) | — | planned | Not implemented |
+| Provider-specific novelty setup | — | host-owned | Not implemented here |
 
 The crate-local maturity plan lives in [ROADMAP.md](ROADMAP.md). The fuller
 phased planning record, including out-of-scope items and reopen triggers, lives
@@ -47,6 +52,10 @@ Cross-crate coordination lives in
 | `ragas` | no | LLM-backed RAGAS-style judges and `RagasHarness`. |
 | `ingestion` | no | Zero-waste ingestion Track 1 (IoCs), Track 3 (propositions), and LLM extractor adapters. |
 | `ingestion-graph` | no | Track 2 knowledge-graph triples plus `petgraph`-backed baseline. Implies `ingestion`. |
+| `embedding-novelty` | no | `EmbeddingNoveltyAdapter` over a host-provided `rig::embeddings::EmbeddingModel`. Implies `knowledge-gain`. |
+| `knowledge-gain` | no | `KnowledgeGainReport` for weighted candidate-minus-baseline scoring, candidate-document ranking, and host-supplied novelty from a `ReportDiff`. Implies `shadow`. |
+| `memvid-example` | no | Builds the example-only `eval_memvid` harness against `rig-memvid`; implies `knowledge-gain`. The library still depends only on `VectorStoreIndexDyn`. |
+| `shadow` | no | `EvalShadowStore` for pre/post retrieval scoring over two `VectorStoreIndexDyn` snapshots. |
 
 ## Quickstart
 
@@ -90,6 +99,92 @@ println!("{}", diff.to_markdown());
 
 The diff refuses to compare reports whose `judge_fingerprint` differs, so
 swapping an LLM judge never silently moves your score.
+
+### Shadow scoring
+
+The `shadow` feature packages the common pre/post pattern: run the same qrels
+and metrics against a baseline retriever and a candidate retriever, then diff
+candidate against baseline.
+
+```rust,no_run
+# use rig::vector_store::VectorStoreIndexDyn;
+# use rig_evals_rag::{EvalShadowStore, Qrels, RecallAtK, RetrievalMetric};
+# async fn demo(before: &dyn VectorStoreIndexDyn, after: &dyn VectorStoreIndexDyn, qrels: &Qrels) -> rig_evals_rag::Result<()> {
+let metrics: Vec<Box<dyn RetrievalMetric>> = vec![Box::new(RecallAtK::new(5))];
+let shadow = EvalShadowStore::new(before, after, 5)
+    .with_concurrency(2)
+    .run(qrels, &metrics)
+    .await?;
+
+println!("{}", shadow.diff.to_markdown());
+# Ok(()) }
+```
+
+The stores are snapshots supplied by the caller; `EvalShadowStore` does not
+mutate either one. That keeps ingest policy and backend-specific cloning in the
+host while giving every retriever the same report/diff surface.
+
+### Knowledge gain
+
+The `knowledge-gain` feature turns a shadow `ReportDiff` into a single weighted
+score plus per-metric, per-query, and candidate-document movers. The ranking is
+deliberately model-free: it measures qrels-backed retrieval improvement and can
+blend in host-supplied novelty scores without requiring this crate to own an
+embedding model.
+
+```rust,no_run
+# use rig_evals_rag::{CandidateDocumentGainInput, KnowledgeGainConfig, KnowledgeGainReport, Qrels, ReportDiff};
+# fn demo(diff: &ReportDiff, qrels: &Qrels) {
+let config = KnowledgeGainConfig::new()
+    .with_metric_weight("recall@5", 2.0)
+    .with_metric_weight("ndcg@5", 1.0)
+    .with_novelty_weight(0.25);
+let candidates = [CandidateDocumentGainInput::new("doc-7").with_novelty(0.6)];
+let gain = KnowledgeGainReport::from_diff(diff, &config)
+    .with_candidate_documents(qrels, &candidates, &config);
+println!("{}", gain.to_markdown());
+# }
+```
+
+The `embedding-novelty` feature adds a narrow adapter for hosts that already
+have a Rig embedding model. It does not construct provider clients or choose
+models. The host supplies candidate chunks and reference KB chunks; the adapter
+returns `CandidateDocumentGainInput` values with novelty filled in. The
+adapter flattens candidate chunks across all candidates into a single embed
+pass batched by `M::MAX_DOCUMENTS`; pass `.with_concurrency(n)` to fan out
+batches in parallel via `buffered(n)`.
+
+```rust,no_run
+# use rig::embeddings::EmbeddingModel;
+# use rig_evals_rag::{CandidateNoveltyInput, EmbeddingNoveltyAdapter};
+# async fn demo<M: EmbeddingModel>(model: M) -> rig_evals_rag::Result<()> {
+let adapter = EmbeddingNoveltyAdapter::new(model).with_concurrency(4);
+let candidates = [CandidateNoveltyInput::new(
+    "doc-7",
+    ["new memory fact".to_string()],
+)];
+let reference = vec!["existing memory fact".to_string()];
+let scored = adapter.score_candidates(&candidates, &reference).await?;
+# let _ = scored;
+# Ok(()) }
+```
+
+### Memvid example
+
+The repository includes committed tiny corpus, memory-card, and qrels fixtures
+that run the generic retrieval harness against a temporary `rig-memvid` archive:
+
+```sh
+cargo run --example eval_memvid --features memvid-example
+```
+
+The example prints current `MultiReport`s, pre/post shadow deltas, and
+knowledge-gain summaries with ranked candidate documents for two paths. The
+first evaluates raw frame retrieval through `MemvidStore`; the second evaluates
+structured/domain-memory facts through `MemoryCardContext`. Logical fixture ids
+are remapped into the id space returned by each retriever, keeping the crate's
+public API generic over `VectorStoreIndexDyn` while proving both Memvid
+integration paths end to end.
 
 ### Repeated-trial reliability
 

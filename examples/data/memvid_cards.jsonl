@@ -1,0 +1,3 @@
+{"id":"card-ada-drink","kind":"preference","entity":"Ada","slot":"drink","value":"espresso","polarity":"positive","source_doc":"doc-memory"}
+{"id":"card-ada-allergy","kind":"profile","entity":"Ada","slot":"allergy","value":"peanuts","source_doc":"doc-memory"}
+{"id":"card-rig-topic","kind":"fact","entity":"Rig","slot":"topic","value":"agent memory evaluation","source_doc":"doc-context-pack"}

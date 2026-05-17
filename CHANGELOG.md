@@ -10,6 +10,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `EvalShadowStore::run` now executes the baseline and candidate harness
+  runs concurrently via `futures::try_join!` (they share no state) and is
+  instrumented with a `tracing` span (`k`, `concurrency`, `queries`,
+  `metrics`). Sequential semantics are preserved for the resulting
+  `ShadowEvalReport`.
+- `EmbeddingNoveltyAdapter` honours `EmbeddingModel::MAX_DOCUMENTS` by
+  flattening candidate chunks once and batching the underlying embed
+  calls (reference chunks are batched the same way). A new
+  `with_concurrency(usize)` knob bounds in-flight batches via
+  `buffered`; the default is `1` so behaviour stays serial unless opted
+  in. Both `score_candidates` and the internal `embed_batched` carry
+  `tracing` spans for observability.
+- **Breaking (pre-publish):** `CandidateDocumentGain` now exposes the
+  raw `relevance_gain` (`Σ query_gain × grade`) and `novelty` (the
+  host-supplied novelty score) separately from the weighted summands
+  `weighted_relevance_gain` and `weighted_novelty_gain`. The previous
+  `novelty_gain` field has been removed in favour of
+  `weighted_novelty_gain`. `to_markdown` table headers update
+  accordingly (`weighted_relevance | weighted_novelty | novelty`). The
+  composite `score` formula is unchanged.
+
 - Bumped `rig-core` dependency from `0.36.0` to `0.37.0` and aliased the
   package as `rig` (`rig = { package = "rig-core", version = "0.37.0",
   default-features = false }`) to absorb upstream's library-name change.
@@ -19,6 +40,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `knowledge-gain` feature with `KnowledgeGainConfig` and
+  `KnowledgeGainReport`, a model-free scoring surface that aggregates weighted
+  candidate-minus-baseline retrieval deltas from a `ReportDiff` into one score
+  plus per-metric, per-query, and candidate-document movers. Candidate ranking
+  uses qrels-backed query gains and optional host-supplied novelty scores. The
+  `eval_memvid` example now prints knowledge-gain summaries and ranked
+  candidate documents for raw-frame and structured-card shadow paths.
+- `embedding-novelty` feature with `EmbeddingNoveltyAdapter`, a provider-neutral
+  adapter over a host-supplied `rig::embeddings::EmbeddingModel`. It embeds
+  candidate chunks and reference KB chunks, computes `1 - max cosine` novelty,
+  and returns `CandidateDocumentGainInput` values that plug into
+  `KnowledgeGainReport::with_candidate_documents`. Provider client setup,
+  model choice, chunking policy, and credential handling remain host-owned.
+- `shadow` feature with `EvalShadowStore` and `ShadowEvalReport` for pre/post
+  retrieval scoring over two `VectorStoreIndexDyn` snapshots. It runs the same
+  qrels and metrics through baseline and candidate stores, then returns the two
+  `MultiReport`s plus their candidate-minus-baseline `ReportDiff`. The runner
+  is intentionally non-mutating; hosts own backend-specific ingest and snapshot
+  preparation.
+- `eval_memvid` example (requires `memvid-example`) with committed corpus,
+  memory-card, and qrels fixtures. It seeds a temporary
+  `rig-memvid::MemvidStore`, evaluates raw frames through `MemvidStore`,
+  evaluates structured/domain-memory facts through `MemoryCardContext`, and
+  uses `EvalShadowStore` to print empty-baseline vs seeded-candidate deltas for
+  both paths. The dependency remains example-only; the library surface still
+  evaluates stores through `VectorStoreIndexDyn`.
 - `SkillTaskSet` JSONL I/O (requires `skills`): `load_jsonl`,
   `load_jsonl_with_id`, `from_jsonl_str`, `to_jsonl_string`, and
   `save_jsonl` let skill suites live as versioned data files instead of

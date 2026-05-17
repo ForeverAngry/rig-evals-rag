@@ -1,0 +1,4 @@
+{"id":"doc-memory","text":"rig memvid durable memory stores agent facts and recall context for later turns"}
+{"id":"doc-context-pack","text":"rig compose context pack selects projected memory cards within a bounded prompt budget"}
+{"id":"doc-mcp","text":"rig mcp loopback exposes remote tools through the same tool registry contract"}
+{"id":"doc-noise","text":"unrelated notes about baking bread and watering plants"}
