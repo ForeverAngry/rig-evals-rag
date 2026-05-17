@@ -1,0 +1,3 @@
+{"query_id":"q-ada-drink","query":"What drink does Ada like?","relevant_docs":{"card-ada-drink":2}}
+{"query_id":"q-ada-allergy","query":"What allergy does Ada have?","relevant_docs":{"card-ada-allergy":2}}
+{"query_id":"q-rig-topic","query":"What topic is Rig connected to?","relevant_docs":{"card-rig-topic":1}}

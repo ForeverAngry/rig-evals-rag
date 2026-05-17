@@ -17,8 +17,8 @@
 //! ## Stability
 //!
 //! The default build ships retrieval-quality evaluation only. Optional features
-//! add RAGAS-style judges and zero-waste ingestion checks while knowledge-gain
-//! metrics remain planned.
+//! add RAGAS-style judges, zero-waste ingestion checks, knowledge-gain scoring,
+//! and optional embedding novelty adapters.
 
 #![deny(missing_docs)]
 #![deny(rust_2018_idioms)]
@@ -27,19 +27,32 @@
 pub mod dataset;
 pub mod error;
 pub mod harness;
+#[cfg(feature = "knowledge-gain")]
+pub mod knowledge_gain;
 #[cfg(feature = "ragas")]
 pub mod ragas;
 pub mod report;
 pub mod retrieval;
+#[cfg(feature = "shadow")]
+pub mod shadow;
 
 pub use dataset::{GoldQuery, Qrels, RetrievedDoc, RetrievedSet};
 pub use error::{Error, Result};
 pub use harness::RetrievalHarness;
+#[cfg(feature = "knowledge-gain")]
+pub use knowledge_gain::{
+    CandidateDocumentGain, CandidateDocumentGainInput, CandidateQueryGain, KnowledgeGainConfig,
+    KnowledgeGainReport, MetricGain, QueryGain,
+};
+#[cfg(feature = "embedding-novelty")]
+pub use knowledge_gain::{CandidateNoveltyInput, EmbeddingNoveltyAdapter};
 pub use report::{
     MetricDelta, MetricReport, MultiReport, QueryDelta, QueryReliability, RegressionGate,
     ReliabilityReport, ReportDiff,
 };
 pub use retrieval::{HitRateAtK, MapAtK, Mrr, NdcgAtK, PrecisionAtK, RecallAtK, RetrievalMetric};
+#[cfg(feature = "shadow")]
+pub use shadow::{EvalShadowStore, ShadowEvalReport};
 
 #[cfg(feature = "ingestion")]
 pub mod ingestion;

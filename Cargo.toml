@@ -24,6 +24,10 @@ petgraph = { version = "0.6", optional = true }
 
 [dev-dependencies]
 anyhow = "1.0.102"
+rig-memvid = { version = "0.1.4", path = "../rig-memvid", default-features = false, features = [
+	"lex",
+	"simd",
+] }
 tempfile = "3"
 tokio = { version = "1.51.1", features = ["macros", "rt-multi-thread"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -32,8 +36,12 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 default = ["retrieval"]
 retrieval = []
 ragas = []
+embedding-novelty = ["knowledge-gain"]
 ingestion = ["dep:regex"]
 ingestion-graph = ["ingestion", "dep:petgraph"]
+knowledge-gain = ["shadow"]
+memvid-example = ["knowledge-gain"]
+shadow = []
 skills = []
 
 [[example]]
@@ -47,6 +55,10 @@ required-features = ["ingestion-graph"]
 [[example]]
 name = "skills_basic"
 required-features = ["skills"]
+
+[[example]]
+name = "eval_memvid"
+required-features = ["memvid-example"]
 
 [lints.clippy]
 dbg_macro = "forbid"

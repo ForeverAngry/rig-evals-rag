@@ -35,8 +35,8 @@ pub enum Error {
     #[error("extractor error: {0}")]
     Extraction(#[from] rig::extractor::ExtractionError),
 
-    /// An embedding-model invocation failed inside a RAGAS judge.
-    #[cfg(feature = "ragas")]
+    /// An embedding-model invocation failed inside a judge or novelty adapter.
+    #[cfg(any(feature = "ragas", feature = "embedding-novelty"))]
     #[error("embedding error: {0}")]
     Embedding(#[from] rig::embeddings::EmbeddingError),
 

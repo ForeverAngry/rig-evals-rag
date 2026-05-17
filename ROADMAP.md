@@ -22,25 +22,24 @@ This roadmap is the crate-local operating plan for `rig-evals-rag`. The cross-cr
 
 - Retrieval metrics are usable; RAGAS is merged but release pending.
 - Zero-waste ingestion tracks are merged and covered by deterministic tests; chunk-stat linting, language/encoding linting, and MinHash-style near-duplicate detection remain planned.
-- There is no committed `eval_memvid.rs` integration example yet.
-- Knowledge-gain scoring and shadow-store contracts remain planned.
+- `examples/eval_memvid.rs` now runs `rig-memvid::MemvidStore` and `MemoryCardContext` through `RetrievalHarness` / `EvalShadowStore` against committed raw-frame and structured-card fixtures.
+- `EvalShadowStore` is available behind `shadow` for pre/post scoring over two `VectorStoreIndexDyn` snapshots.
+- Knowledge-gain scoring is available behind `knowledge-gain`, including candidate-document ranking and host-supplied novelty scores; `embedding-novelty` adds a provider-neutral adapter over host-supplied Rig embedding models.
 - Bootstrap confidence intervals and non-zero CI regression exits are not implemented.
 
 ## Next Work
 
 1. Cut the RAGAS and ingestion release after final validation and README/changelog sync.
 2. Add chunk-stat ingestion linting for token-length distributions, metadata coverage, language/encoding sanity, and MinHash near-duplicates.
-3. Add `examples/eval_memvid.rs` wiring `rig-memvid::MemvidStore` through `RetrievalHarness` with committed fixture data.
-4. Define `EvalShadowStore` for pre/post-ingest scoring and implement the memvid shadow path.
-5. Add knowledge-gain scoring: pre/post qrels delta plus embedding novelty.
-6. Add bootstrap confidence intervals and non-zero regression exits for baseline comparisons.
+3. Add provider-specific novelty examples only where they belong: downstream demos or docs that already own credentials and model setup.
+4. Add bootstrap confidence intervals and non-zero regression exits for baseline comparisons.
 
 ## Maturity Bar
 
 - A KB regression can be reproduced in CI against committed qrels fixtures.
 - Retrieval and RAGAS reports include stable metadata and refuse unsafe comparisons across judge fingerprints.
 - Ingestion quality failures identify chunking, duplication, metadata, retrieval, or judging as the likely layer.
-- Knowledge gain produces a single ranked score per candidate document.
+- Knowledge gain produces a single report-level score and ranked candidate documents with optional host-supplied or adapter-computed novelty signals.
 
 ## Non-Goals
 
