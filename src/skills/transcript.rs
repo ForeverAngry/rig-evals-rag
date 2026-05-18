@@ -37,7 +37,7 @@ pub struct Transcript {
     ///
     /// Populate this when you can observe the dispatch decision (e.g. via
     /// `rig-compose`'s `CoordinatorAgent` or by listening to a
-    /// `skill.selected` event from `rig-observe`). Leave `None` if your
+    /// `skill.selected` event from `rig-tap`). Leave `None` if your
     /// agent does not surface a routing signal — trigger graders are then
     /// skipped without failing the task.
     #[serde(default, skip_serializing_if = "Option::is_none")]
