@@ -57,7 +57,7 @@ Cross-crate coordination lives in
 | `memvid-example` | no | Builds the example-only `eval_memvid` harness against `rig-memvid`; implies `knowledge-gain`. The library still depends only on `VectorStoreIndexDyn`. |
 | `shadow` | no | `EvalShadowStore` for pre/post retrieval scoring over two `VectorStoreIndexDyn` snapshots. |
 
-## Quickstart
+## Quick start
 
 ```rust,no_run
 use anyhow::Result;
