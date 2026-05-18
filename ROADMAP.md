@@ -15,13 +15,17 @@ This roadmap is the crate-local operating plan for `rig-evals-rag`. The cross-cr
 - Off-by-default `ragas` feature with RAGAS-style judges, `RagasHarness`, bounded-concurrency judge calls, XML-fenced prompts, abstention scores, and judge fingerprint diff protection.
 - Off-by-default `ingestion` feature with zero-waste ingestion deltas, deterministic IoC extraction, proposition extraction, redundancy checks, and model-independent contract tests for LLM-backed proposition extractors.
 - Off-by-default `ingestion-graph` sub-feature with knowledge-graph triples, in-memory and `petgraph` baselines, and model-independent contract tests for LLM-backed triple extractors.
+- Chunk-stat ingestion linting (`ChunkLintConfig`, `ChunkStats`,
+  `ChunkLintReport`, `ChunkLintWarning`, `lint_chunks`) covering
+  token-length distributions, metadata coverage, and per-chunk warnings
+  ([src/ingestion/lint.rs](src/ingestion/lint.rs)).
 - Repeated-trial reliability reporting with thresholded pass@k and pass^k over
   shared `MetricReport`s.
 
 ## Prototype Grade
 
 - Retrieval metrics are usable; RAGAS is merged but release pending.
-- Zero-waste ingestion tracks are merged and covered by deterministic tests; chunk-stat linting, language/encoding linting, and MinHash-style near-duplicate detection remain planned.
+- Zero-waste ingestion tracks are merged and covered by deterministic tests; chunk-stat linting ships token-length and metadata-coverage checks today; language/encoding linting and MinHash-style near-duplicate detection remain planned.
 - `examples/eval_memvid.rs` now runs `rig-memvid::MemvidStore` and `MemoryCardContext` through `RetrievalHarness` / `EvalShadowStore` against committed raw-frame and structured-card fixtures.
 - `EvalShadowStore` is available behind `shadow` for pre/post scoring over two `VectorStoreIndexDyn` snapshots.
 - Knowledge-gain scoring is available behind `knowledge-gain`, including candidate-document ranking and host-supplied novelty scores; `embedding-novelty` adds a provider-neutral adapter over host-supplied Rig embedding models.
@@ -30,7 +34,7 @@ This roadmap is the crate-local operating plan for `rig-evals-rag`. The cross-cr
 ## Next Work
 
 1. Cut the RAGAS and ingestion release after final validation and README/changelog sync.
-2. Add chunk-stat ingestion linting for token-length distributions, metadata coverage, language/encoding sanity, and MinHash near-duplicates.
+2. Extend chunk-stat ingestion linting with language/encoding sanity checks and MinHash near-duplicate detection.
 3. Add provider-specific novelty examples only where they belong: downstream demos or docs that already own credentials and model setup.
 4. Add bootstrap confidence intervals and non-zero regression exits for baseline comparisons.
 
