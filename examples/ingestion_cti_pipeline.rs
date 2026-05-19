@@ -11,7 +11,7 @@ use rig_evals_rag::{
 
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
-    let model_name = env::var("OLLAMA_MODEL").unwrap_or_else(|_| "llama3.1".to_string());
+    let model_name = env::var("OLLAMA_MODEL").unwrap_or_else(|_| "qwen3.5:9b".to_string());
 
     let client = Client::new("http://localhost:11434")?;
     let model = client.completion_model(&model_name);

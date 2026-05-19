@@ -12,12 +12,9 @@ use rig_evals_rag::{
 };
 
 #[tokio::test]
-#[ignore = "requires a running Ollama server and OLLAMA_MODEL"]
+#[ignore = "requires a running Ollama server and qwen3.5:9b or OLLAMA_MODEL"]
 async fn live_ollama_extractors_work() {
-    let Ok(model_name) = std::env::var("OLLAMA_MODEL") else {
-        eprintln!("set OLLAMA_MODEL to a local Ollama model that supports tool calls");
-        return;
-    };
+    let model_name = std::env::var("OLLAMA_MODEL").unwrap_or_else(|_| "qwen3.5:9b".to_string());
 
     let client = Client::new("http://localhost:11434").unwrap();
     let model = client.completion_model(&model_name);

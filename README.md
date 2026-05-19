@@ -30,6 +30,9 @@ flags.
 | Model-free knowledge-gain scoring | — | `knowledge-gain` | Unit tests + `eval_memvid` |
 | Candidate-document gain ranking + host novelty | — | `knowledge-gain` | Unit tests + `eval_memvid` |
 | Generic embedding novelty adapter | — | `embedding-novelty` | Deterministic fake-model unit test |
+| Memory behavior harness | — | `memory` | `tests/memory_harness.rs` |
+| Model behavior harness | — | `models` | `tests/models_harness.rs` |
+| Agent behavior harness | — | `agents` | `tests/agents_harness.rs` |
 | RAGAS-style LLM judges (faithfulness, context recall, …) | — | `ragas` | Unit tests with deterministic judge fixtures |
 | Zero-waste IoC ingestion | — | `ingestion` | `tests/ingestion_ioc.rs` |
 | Proposition distillation + redundancy checks | — | `ingestion` | `tests/ingestion_propositions.rs` |
@@ -56,6 +59,9 @@ Cross-crate coordination lives in
 | `knowledge-gain` | no | `KnowledgeGainReport` for weighted candidate-minus-baseline scoring, candidate-document ranking, and host-supplied novelty from a `ReportDiff`. Implies `shadow`. |
 | `memvid-example` | no | Builds the example-only `eval_memvid` harness against `rig-memvid`; implies `knowledge-gain`. The library still depends only on `VectorStoreIndexDyn`. |
 | `shadow` | no | `EvalShadowStore` for pre/post retrieval scoring over two `VectorStoreIndexDyn` snapshots. |
+| `memory` | no | Backend-neutral memory behavior harness over host-provided runners and captured recall observations. |
+| `models` | no | Provider-neutral model behavior harness for output terms, JSON validity, and token-budget checks. |
+| `agents` | no | Agent behavior harness for final-output assertions, expected tools, and turn-budget checks. |
 
 ## Quick start
 
@@ -185,6 +191,37 @@ structured/domain-memory facts through `MemoryCardContext`. Logical fixture ids
 are remapped into the id space returned by each retriever, keeping the crate's
 public API generic over `VectorStoreIndexDyn` while proving both Memvid
 integration paths end to end.
+
+### Behavior harnesses
+
+The `memory`, `models`, and `agents` features add small runner-driven harnesses
+for surfaces that are broader than pure retrieval. They do not construct
+provider clients or own runtime policy; hosts implement the runner trait for a
+real agent/model/memory backend, and the harness grades the captured
+observation into the same `MetricReport` layer used by retrieval.
+
+```rust,no_run
+# use std::future::Future;
+# use std::pin::Pin;
+# use rig_evals_rag::{ModelBehaviorHarness, ModelBehaviorTask, ModelBehaviorTaskSet, ModelObservation, ModelRunner, Result};
+# struct Runner;
+# impl ModelRunner for Runner {
+#     fn run<'a>(&'a self, _: &'a ModelBehaviorTask) -> Pin<Box<dyn Future<Output = Result<ModelObservation>> + Send + 'a>> {
+#         Box::pin(async { Ok(ModelObservation { output: "{\"answer\":\"ok\"}".to_string(), output_tokens: Some(6), ..Default::default() }) })
+#     }
+# }
+# async fn demo() -> Result<()> {
+let mut suite = ModelBehaviorTaskSet::new("json-smoke.v1");
+suite.push(
+    ModelBehaviorTask::new("q1", "answer as JSON")
+        .requiring_json()
+        .with_max_output_tokens(32),
+);
+
+let report = ModelBehaviorHarness::new(Runner).run(&suite).await?;
+println!("mean={:.3}", report.mean_score);
+# Ok(()) }
+```
 
 ### Repeated-trial reliability
 

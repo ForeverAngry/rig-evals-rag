@@ -27,8 +27,8 @@
 //! )];
 //!
 //! let metrics: Vec<Box<dyn DynRagasMetric>> = vec![
-//!     Box::new(FaithfulnessMetric::new(model.clone(), "ollama:llama3.1:8b@v1")),
-//!     Box::new(AnswerRelevanceMetric::new(model, embedder, 3, "ollama:llama3.1:8b@v1")?),
+//!     Box::new(FaithfulnessMetric::new(model.clone(), "ollama:qwen3.5:9b@v1")),
+//!     Box::new(AnswerRelevanceMetric::new(model, embedder, 3, "ollama:qwen3.5:9b@v1")?),
 //! ];
 //!
 //! let report = RagasHarness::new().with_concurrency(2).run(&samples, &metrics).await?;

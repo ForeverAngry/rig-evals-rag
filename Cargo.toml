@@ -43,6 +43,9 @@ knowledge-gain = ["shadow"]
 memvid-example = ["knowledge-gain"]
 shadow = []
 skills = []
+memory = []
+models = []
+agents = []
 
 [[example]]
 name = "ingestion_ioc"

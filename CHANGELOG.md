@@ -40,6 +40,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `memory`, `models`, and `agents` feature flags with runner-driven behavior
+  harnesses. `MemoryHarness` grades captured recall evidence across write /
+  query / reload scenarios; `ModelBehaviorHarness` grades provider-neutral
+  output behavior such as required terms, forbidden terms, JSON validity, and
+  output-token budgets; `AgentHarness` grades final output, expected tool
+  calls, and turn budgets. All three emit typed reports with per-task scores
+  and conversion into the shared `MetricReport` layer. No new dependencies.
 - `knowledge-gain` feature with `KnowledgeGainConfig` and
   `KnowledgeGainReport`, a model-free scoring surface that aggregates weighted
   candidate-minus-baseline retrieval deltas from a `ReportDiff` into one score

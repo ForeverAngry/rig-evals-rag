@@ -24,11 +24,17 @@
 #![deny(rust_2018_idioms)]
 #![forbid(unsafe_code)]
 
+#[cfg(feature = "agents")]
+pub mod agents;
 pub mod dataset;
 pub mod error;
 pub mod harness;
 #[cfg(feature = "knowledge-gain")]
 pub mod knowledge_gain;
+#[cfg(feature = "memory")]
+pub mod memory;
+#[cfg(feature = "models")]
+pub mod models;
 #[cfg(feature = "ragas")]
 pub mod ragas;
 pub mod report;
@@ -36,6 +42,11 @@ pub mod retrieval;
 #[cfg(feature = "shadow")]
 pub mod shadow;
 
+#[cfg(feature = "agents")]
+pub use agents::{
+    AgentEvalReport, AgentEvalResult, AgentEvalRunner, AgentEvalTask, AgentEvalTaskSet,
+    AgentHarness, AgentObservation, AgentToolCall,
+};
 pub use dataset::{GoldQuery, Qrels, RetrievedDoc, RetrievedSet};
 pub use error::{Error, Result};
 pub use harness::RetrievalHarness;
@@ -46,6 +57,16 @@ pub use knowledge_gain::{
 };
 #[cfg(feature = "embedding-novelty")]
 pub use knowledge_gain::{CandidateNoveltyInput, EmbeddingNoveltyAdapter};
+#[cfg(feature = "memory")]
+pub use memory::{
+    MemoryEvalReport, MemoryEvalResult, MemoryHarness, MemoryObservation, MemoryRunner, MemoryTask,
+    MemoryTaskSet,
+};
+#[cfg(feature = "models")]
+pub use models::{
+    ModelBehaviorHarness, ModelBehaviorReport, ModelBehaviorResult, ModelBehaviorTask,
+    ModelBehaviorTaskSet, ModelObservation, ModelRunner,
+};
 pub use report::{
     MetricDelta, MetricReport, MultiReport, QueryDelta, QueryReliability, RegressionGate,
     ReliabilityReport, ReportDiff,
